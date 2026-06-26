@@ -1,0 +1,738 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>2026 FIFA World Cup Bracket</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;900&family=Barlow:wght@400;500&display=swap');
+
+  :root {
+    --bg:      #0a0a0f;
+    --surface: #13131e;
+    --border:  #2a2a3d;
+    --accent:  #c9a84c;
+    --win:     rgba(46,125,82,0.22);
+    --text:    #e8e8f0;
+    --muted:   #6b6b8a;
+    --live:    #e85c4a;
+    --pending: #1c1c2e;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Barlow', sans-serif;
+    min-height: 100vh;
+    overflow: auto;
+  }
+
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 24px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+  }
+
+  .header-left { display: flex; align-items: center; gap: 12px; }
+  .trophy { font-size: 24px; }
+
+  header h1 {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 18px; font-weight: 900;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--accent);
+  }
+  header h1 span { color: var(--text); font-weight: 400; }
+
+  .status-bar {
+    display: flex; align-items: center; gap: 16px;
+    font-size: 10px; color: var(--muted);
+    font-family: 'Barlow Condensed', sans-serif;
+    letter-spacing: 0.05em; text-transform: uppercase;
+  }
+
+  .pulse {
+    display: inline-block; width: 6px; height: 6px;
+    border-radius: 50%; background: var(--accent);
+    animation: pulse 2s ease-in-out infinite; margin-right: 3px;
+  }
+  @keyframes pulse {
+    0%,100% { opacity:1; transform:scale(1); }
+    50%      { opacity:0.4; transform:scale(0.7); }
+  }
+
+  /* ── BRACKET CANVAS ──────────────────────────────────── */
+  .bracket-wrap {
+    padding: 16px 12px 24px;
+    overflow-x: auto;
+    overflow-y: auto;
+  }
+
+  /* The full bracket is an SVG-sized div with absolute children */
+  .bracket-canvas {
+    position: relative;
+    /* width & height set by JS */
+  }
+
+  /* SVG connector layer sits behind cards */
+  .connector-svg {
+    position: absolute;
+    top: 0; left: 0;
+    pointer-events: none;
+  }
+
+  /* ── MATCH CARD ──────────────────────────────────────── */
+  .match {
+    position: absolute;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    overflow: hidden;
+    transition: border-color 0.2s;
+  }
+  .match:hover { border-color: var(--accent); }
+  .match.live  { border-color: var(--live); }
+
+  .live-badge {
+    position: absolute; top: 3px; right: 5px;
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 8px; font-weight: 700; letter-spacing: 0.1em;
+    color: var(--live);
+  }
+
+  .team-row {
+    display: flex; align-items: center;
+    padding: 4px 7px; gap: 5px;
+    border-bottom: 1px solid var(--border);
+    min-height: 24px;
+  }
+  .team-row:last-of-type { border-bottom: none; }
+  .team-row.winner    { background: var(--win); }
+  .team-row.elim      { opacity: 0.38; }
+  .team-row.pending   { background: var(--pending); }
+
+  .t-flag { font-size: 12px; width: 16px; text-align: center; flex-shrink: 0; line-height: 1; }
+  .t-name {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 11px; font-weight: 600;
+    letter-spacing: 0.04em; text-transform: uppercase;
+    flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .team-row.pending .t-name {
+    color: var(--muted); font-size: 9px; font-weight: 400; letter-spacing: 0.05em;
+  }
+  .t-score {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 12px; font-weight: 700; color: var(--accent);
+    min-width: 12px; text-align: right; flex-shrink: 0;
+  }
+  .team-row.pending .t-score { color: var(--muted); }
+
+  .match-meta {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 9px; color: var(--muted);
+    text-align: center; padding: 3px 6px;
+    border-top: 1px solid var(--border);
+    white-space: nowrap;
+    letter-spacing: 0.03em;
+  }
+  .meta-live { color: var(--live); font-weight: 700; }
+
+  /* ── ROUND LABEL ─────────────────────────────────────── */
+  .round-label {
+    position: absolute;
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 10px; font-weight: 700;
+    letter-spacing: 0.12em; text-transform: uppercase;
+    color: var(--muted); text-align: center;
+    pointer-events: none;
+  }
+
+  /* ── CHAMPION BADGE ──────────────────────────────────── */
+  .champion-box {
+    position: absolute;
+    background: linear-gradient(135deg, #1a1608, #13131e);
+    border: 1px solid var(--accent);
+    border-radius: 8px;
+    padding: 12px 14px;
+    text-align: center;
+  }
+  .champ-label {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 9px; font-weight: 700;
+    letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--accent); margin-bottom: 4px;
+  }
+  .champ-flag { font-size: 26px; display: block; margin: 4px 0; }
+  .champ-name {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 16px; font-weight: 900;
+    letter-spacing: 0.06em; text-transform: uppercase;
+  }
+
+  .loading {
+    text-align: center; padding: 60px 40px;
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 14px; letter-spacing: 0.1em;
+    text-transform: uppercase; color: var(--muted);
+  }
+  .spin {
+    width: 28px; height: 28px;
+    border: 2px solid var(--border); border-top-color: var(--accent);
+    border-radius: 50%; animation: spin 0.8s linear infinite;
+    margin: 0 auto 12px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-left">
+    <span class="trophy">🏆</span>
+    <h1>2026 FIFA <span>World Cup</span> — Knockout Bracket</h1>
+  </div>
+  <div class="status-bar">
+    <span><span class="pulse"></span>Auto-refresh</span>
+    <span id="last-updated">—</span>
+    <span id="countdown">Next: 5:00</span>
+  </div>
+</header>
+
+<div class="bracket-wrap">
+  <div id="root"><div class="loading"><div class="spin"></div>Loading bracket…</div></div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════
+//  CONFIG
+// ═══════════════════════════════════════════════════════
+const REFRESH_MS = 5 * 60 * 1000;
+
+// Card dimensions
+const CW = 158;   // card width
+const CH = 74;    // card height (2 team rows + meta)
+const ROW_H = 24; // team row height
+const META_H = 16;// meta row height
+
+// Horizontal spacing between rounds
+const COL_GAP = 38;
+// Vertical gap between cards within a round
+const CARD_GAP = 10;
+// Top padding
+const TOP_PAD = 36;
+// Left/right outer padding
+const SIDE_PAD = 10;
+
+// ═══════════════════════════════════════════════════════
+//  FLAGS
+// ═══════════════════════════════════════════════════════
+const FLAGS = {
+  BRA:'🇧🇷',FRA:'🇫🇷',ENG:'🏴󠁧󠁢󠁥󠁮󠁧󠁿',ESP:'🇪🇸',GER:'🇩🇪',ARG:'🇦🇷',
+  POR:'🇵🇹',NED:'🇳🇱',BEL:'🇧🇪',URU:'🇺🇾',USA:'🇺🇸',MEX:'🇲🇽',
+  COL:'🇨🇴',MAR:'🇲🇦',JPN:'🇯🇵',KOR:'🇰🇷',SEN:'🇸🇳',AUS:'🇦🇺',
+  CRO:'🇭🇷',SWE:'🇸🇪',NOR:'🇳🇴',TUR:'🇹🇷',ECU:'🇪🇨',PAR:'🇵🇾',
+  EGY:'🇪🇬',GHA:'🇬🇭',IRN:'🇮🇷',KSA:'🇸🇦',CPV:'🇨🇻',COD:'🇨🇩',
+  UZB:'🇺🇿',RSA:'🇿🇦',TUN:'🇹🇳',HTI:'🇭🇹',CZE:'🇨🇿',SCO:'🏴󠁧󠁢󠁳󠁣󠁴󠁿',
+  NZL:'🇳🇿',PAN:'🇵🇦',IRQ:'🇮🇶',CUW:'🇨🇼',CIV:'🇨🇮',
+};
+const fl = c => FLAGS[c] || '🏳️';
+
+// ═══════════════════════════════════════════════════════
+//  BRACKET DATA
+//  Left half:  matches 1-8  (R32) → R16 → QF → SF1
+//  Right half: matches 9-16 (R32) → R16 → QF → SF2
+//  Final in centre
+// ═══════════════════════════════════════════════════════
+const SEED = {
+  // LEFT SIDE — flows left→right
+  L: {
+    r32: [
+      { id:'r32_1',  mn:1,  home:'BRA', away:'MAR',  hS:null,aS:null, st:'scheduled', dt:'Jun 29', tm:'3:00 PM ET' },
+      { id:'r32_2',  mn:2,  home:'MEX', away:'RSA',  hS:null,aS:null, st:'scheduled', dt:'Jun 29', tm:'6:00 PM ET' },
+      { id:'r32_3',  mn:3,  home:'ECU', away:'KOR',  hS:null,aS:null, st:'scheduled', dt:'Jun 29', tm:'9:00 PM ET' },
+      { id:'r32_4',  mn:4,  home:'CIV', away:'TUN',  hS:null,aS:null, st:'scheduled', dt:'Jun 30', tm:'3:00 PM ET' },
+      { id:'r32_5',  mn:5,  home:'NED', away:'TUR',  hS:null,aS:null, st:'scheduled', dt:'Jun 30', tm:'6:00 PM ET' },
+      { id:'r32_6',  mn:6,  home:'PAR', away:'JPN',  hS:null,aS:null, st:'scheduled', dt:'Jun 30', tm:'9:00 PM ET' },
+      { id:'r32_7',  mn:7,  home:'FRA', away:'SEN',  hS:null,aS:null, st:'scheduled', dt:'Jul 1',  tm:'3:00 PM ET' },
+      { id:'r32_8',  mn:8,  home:'ESP', away:'CPV',  hS:null,aS:null, st:'scheduled', dt:'Jul 1',  tm:'6:00 PM ET' },
+    ],
+    r16: [
+      { id:'r16_1', mn:17, hrRef:'W:r32_1', arRef:'W:r32_2', hS:null,aS:null, st:'tbd', dt:'Jul 5', tm:'3:00 PM ET' },
+      { id:'r16_2', mn:18, hrRef:'W:r32_3', arRef:'W:r32_4', hS:null,aS:null, st:'tbd', dt:'Jul 5', tm:'9:00 PM ET' },
+      { id:'r16_3', mn:19, hrRef:'W:r32_5', arRef:'W:r32_6', hS:null,aS:null, st:'tbd', dt:'Jul 6', tm:'3:00 PM ET' },
+      { id:'r16_4', mn:20, hrRef:'W:r32_7', arRef:'W:r32_8', hS:null,aS:null, st:'tbd', dt:'Jul 6', tm:'9:00 PM ET' },
+    ],
+    qf: [
+      { id:'qf_1', mn:25, hrRef:'W:r16_1', arRef:'W:r16_2', hS:null,aS:null, st:'tbd', dt:'Jul 11', tm:'3:00 PM ET' },
+      { id:'qf_2', mn:26, hrRef:'W:r16_3', arRef:'W:r16_4', hS:null,aS:null, st:'tbd', dt:'Jul 11', tm:'9:00 PM ET' },
+    ],
+    sf: [
+      { id:'sf_1', mn:29, hrRef:'W:qf_1', arRef:'W:qf_2', hS:null,aS:null, st:'tbd', dt:'Jul 14', tm:'9:00 PM ET' },
+    ],
+  },
+  // RIGHT SIDE — flows right→left (mirror)
+  R: {
+    r32: [
+      { id:'r32_9',  mn:9,  home:'EGY', away:'BEL',  hS:null,aS:null, st:'scheduled', dt:'Jul 1',  tm:'9:00 PM ET' },
+      { id:'r32_10', mn:10, home:'ENG', away:'CRO',  hS:null,aS:null, st:'scheduled', dt:'Jul 2',  tm:'3:00 PM ET' },
+      { id:'r32_11', mn:11, home:'POR', away:'COD',  hS:null,aS:null, st:'scheduled', dt:'Jul 2',  tm:'6:00 PM ET' },
+      { id:'r32_12', mn:12, home:'URU', away:'KSA',  hS:null,aS:null, st:'scheduled', dt:'Jul 2',  tm:'9:00 PM ET' },
+      { id:'r32_13', mn:13, home:'ARG', away:'NOR',  hS:null,aS:null, st:'scheduled', dt:'Jul 3',  tm:'3:00 PM ET' },
+      { id:'r32_14', mn:14, home:'GER', away:'SWE',  hS:null,aS:null, st:'scheduled', dt:'Jul 3',  tm:'6:00 PM ET' },
+      { id:'r32_15', mn:15, home:'USA', away:'COL',  hS:null,aS:null, st:'scheduled', dt:'Jul 3',  tm:'9:00 PM ET' },
+      { id:'r32_16', mn:16, home:'PAN', away:'NZL',  hS:null,aS:null, st:'scheduled', dt:'Jul 4',  tm:'6:00 PM ET' },
+    ],
+    r16: [
+      { id:'r16_5', mn:21, hrRef:'W:r32_9',  arRef:'W:r32_10', hS:null,aS:null, st:'tbd', dt:'Jul 7', tm:'3:00 PM ET' },
+      { id:'r16_6', mn:22, hrRef:'W:r32_11', arRef:'W:r32_12', hS:null,aS:null, st:'tbd', dt:'Jul 7', tm:'9:00 PM ET' },
+      { id:'r16_7', mn:23, hrRef:'W:r32_13', arRef:'W:r32_14', hS:null,aS:null, st:'tbd', dt:'Jul 8', tm:'3:00 PM ET' },
+      { id:'r16_8', mn:24, hrRef:'W:r32_15', arRef:'W:r32_16', hS:null,aS:null, st:'tbd', dt:'Jul 8', tm:'9:00 PM ET' },
+    ],
+    qf: [
+      { id:'qf_3', mn:27, hrRef:'W:r16_5', arRef:'W:r16_6', hS:null,aS:null, st:'tbd', dt:'Jul 12', tm:'3:00 PM ET' },
+      { id:'qf_4', mn:28, hrRef:'W:r16_7', arRef:'W:r16_8', hS:null,aS:null, st:'tbd', dt:'Jul 12', tm:'9:00 PM ET' },
+    ],
+    sf: [
+      { id:'sf_2', mn:30, hrRef:'W:qf_3', arRef:'W:qf_4', hS:null,aS:null, st:'tbd', dt:'Jul 15', tm:'9:00 PM ET' },
+    ],
+  },
+  final: { id:'final_1', mn:31, hrRef:'W:sf_1', arRef:'W:sf_2', hS:null,aS:null, st:'tbd', dt:'Jul 19', tm:'3:00 PM ET' },
+  champion: null,
+};
+
+// ═══════════════════════════════════════════════════════
+//  HELPERS
+// ═══════════════════════════════════════════════════════
+function winnerOf(m) {
+  if (!m || m.st !== 'final') return null;
+  if (m.hS > m.aS) return m.home;
+  if (m.aS > m.hS) return m.away;
+  return null;
+}
+
+function buildMap(data) {
+  const map = {};
+  ['r32','r16','qf','sf'].forEach(rnd => {
+    ['L','R'].forEach(side => {
+      (data[side][rnd]||[]).forEach(m => { map[m.id] = m; });
+    });
+  });
+  map[data.final.id] = data.final;
+  return map;
+}
+
+function resolveRef(ref, map) {
+  if (!ref) return { code:null, label:'TBD', pending:true };
+  if (ref.startsWith('W:')) {
+    const src = map[ref.slice(2)];
+    if (!src) return { code:null, label:'TBD', pending:true };
+    const w = winnerOf(src);
+    if (w) return { code:w, label:w, pending:false };
+    return { code:null, label:`W · M${src.mn}`, pending:true };
+  }
+  return { code:ref, label:ref, pending:false };
+}
+
+function resolveAll(data) {
+  const map = buildMap(data);
+  function res(m) {
+    if (m.home && m.away) return m; // already has real teams
+    const h = resolveRef(m.hrRef, map);
+    const a = resolveRef(m.arRef, map);
+    return { ...m,
+      home: h.code, homeLabel: h.label, homePending: h.pending,
+      away: a.code, awayLabel: a.label, awayPending: a.pending };
+  }
+  ['L','R'].forEach(side => {
+    ['r16','qf','sf'].forEach(rnd => {
+      data[side][rnd] = data[side][rnd].map(res);
+    });
+  });
+  data.final = res(data.final);
+  return data;
+}
+
+// ═══════════════════════════════════════════════════════
+//  LAYOUT ENGINE
+//  Returns array of { match, x, y } for absolute placement
+// ═══════════════════════════════════════════════════════
+function layoutSide(rounds, startX, direction) {
+  // direction: 1 = left-to-right, -1 = right-to-left (mirror)
+  // rounds = [r32(8), r16(4), qf(2), sf(1)]
+  // We calculate Y positions so each round's cards are centred
+  // relative to the pairs they came from.
+
+  const roundNames = ['r32','r16','qf','sf'];
+  const cols = []; // cols[i] = array of { match, x, y }
+
+  // Round 0 (R32): 8 cards evenly spaced
+  const r32Count = rounds[0].length; // 8
+  const totalHeight = r32Count * CH + (r32Count - 1) * CARD_GAP;
+
+  // Build col 0
+  const col0 = rounds[0].map((m, i) => ({
+    match: m,
+    x: 0,
+    y: TOP_PAD + i * (CH + CARD_GAP),
+  }));
+  cols.push(col0);
+
+  // Build subsequent cols by averaging pairs
+  for (let ci = 1; ci < rounds.length; ci++) {
+    const prev = cols[ci - 1];
+    const curr = rounds[ci];
+    const colX = ci * (CW + COL_GAP);
+    const col = curr.map((m, i) => {
+      const topCard = prev[i * 2];
+      const botCard = prev[i * 2 + 1];
+      const centreY = (topCard.y + botCard.y + CH) / 2 - CH / 2;
+      return { match: m, x: colX, y: centreY };
+    });
+    cols.push(col);
+  }
+
+  // Apply direction (mirror for right side)
+  // For right side we'll flip x later when we know total width
+  return { cols, totalHeight };
+}
+
+// ═══════════════════════════════════════════════════════
+//  RENDER HTML
+// ═══════════════════════════════════════════════════════
+function teamRowHTML(m, side) {
+  const isPending = m[side + 'Pending'];
+  const code  = m[side] || null;
+  const label = m[side + 'Label'] || code || 'TBD';
+  const score = m[side === 'home' ? 'hS' : 'aS'];
+  const w     = winnerOf(m);
+  const won   = code && w === code;
+  const lost  = code && w && w !== code;
+
+  let cls = 'team-row';
+  if (isPending) cls += ' pending';
+  else if (won)  cls += ' winner';
+  else if (lost) cls += ' elim';
+
+  const flagSpan = isPending
+    ? `<span class="t-flag" style="font-size:9px;color:var(--muted)">▪</span>`
+    : `<span class="t-flag">${code ? fl(code) : '⬜'}</span>`;
+
+  const showScore = !isPending && m.st !== 'tbd' && m.st !== 'scheduled' && score !== null;
+  const scoreSpan = `<span class="t-score">${showScore ? score : '–'}</span>`;
+
+  return `<div class="${cls}">${flagSpan}<span class="t-name">${label}</span>${scoreSpan}</div>`;
+}
+
+function matchMetaHTML(m) {
+  const isLive = m.st === 'live' || m.st === 'inprogress';
+  if (isLive) return `<div class="match-meta"><span class="meta-live">● LIVE</span></div>`;
+  const prefix = m.st === 'final' ? 'FT · ' : '';
+  const time   = m.st === 'final' ? '' : (m.tm ? ' · ' + m.tm : '');
+  return `<div class="match-meta">${prefix}${m.dt || ''}${time}</div>`;
+}
+
+function matchHTML(m, x, y) {
+  const isLive = m.st === 'live' || m.st === 'inprogress';
+  return `
+    <div class="match${isLive?' live':''}" style="left:${x}px;top:${y}px;width:${CW}px;">
+      ${isLive ? '<span class="live-badge">LIVE</span>' : ''}
+      ${teamRowHTML(m,'home')}
+      ${teamRowHTML(m,'away')}
+      ${matchMetaHTML(m)}
+    </div>`;
+}
+
+// ═══════════════════════════════════════════════════════
+//  SVG CONNECTORS
+// ═══════════════════════════════════════════════════════
+function connectorLines(cols, direction) {
+  // direction: 1=LtoR, -1=RtoL
+  let svg = '';
+  for (let ci = 0; ci < cols.length - 1; ci++) {
+    const from = cols[ci];
+    const to   = cols[ci + 1];
+    for (let pi = 0; pi < to.length; pi++) {
+      const top = from[pi * 2];
+      const bot = from[pi * 2 + 1];
+      const dst = to[pi];
+      // exit point: right edge of card (LtoR) or left edge (RtoL)
+      const fromX1 = direction === 1 ? top.x + CW : top.x;
+      const fromX2 = direction === 1 ? bot.x + CW : bot.x;
+      const toX    = direction === 1 ? dst.x       : dst.x + CW;
+
+      const fromY1 = top.y + CH / 2;
+      const fromY2 = bot.y + CH / 2;
+      const midY   = (fromY1 + fromY2) / 2;
+      const midX   = (fromX1 + toX) / 2;
+
+      svg += `<line x1="${fromX1}" y1="${fromY1}" x2="${midX}" y2="${fromY1}" stroke="#2a2a3d" stroke-width="1.2"/>`;
+      svg += `<line x1="${fromX2}" y1="${fromY2}" x2="${midX}" y2="${fromY2}" stroke="#2a2a3d" stroke-width="1.2"/>`;
+      svg += `<line x1="${midX}"   y1="${fromY1}" x2="${midX}" y2="${fromY2}" stroke="#2a2a3d" stroke-width="1.2"/>`;
+      svg += `<line x1="${midX}"   y1="${midY}"   x2="${toX}"  y2="${midY}"   stroke="#2a2a3d" stroke-width="1.2"/>`;
+    }
+  }
+  return svg;
+}
+
+// Final connector from SF to Final card
+function finalConnectors(sfL, sfR, finalX, finalY, canvasW) {
+  // sfL: last col of left side (sf col, 1 card)
+  // sfR: last col of right side (sf col, 1 card)
+  const lCard = sfL[0];
+  const rCard = sfR[0];
+  const fMidY = finalY + CH / 2;
+
+  const lExitX = lCard.x + CW;
+  const rExitX = rCard.x;
+  const lExitY = lCard.y + CH / 2;
+  const rExitY = rCard.y + CH / 2;
+
+  const fEnterL = finalX;
+  const fEnterR = finalX + CW;
+
+  let svg = '';
+  // left SF → final left edge
+  svg += `<line x1="${lExitX}" y1="${lExitY}" x2="${fEnterL}" y2="${lExitY}" stroke="#c9a84c" stroke-width="1.2" opacity="0.5"/>`;
+  svg += `<line x1="${fEnterL}" y1="${lExitY}" x2="${fEnterL}" y2="${fMidY}" stroke="#c9a84c" stroke-width="1.2" opacity="0.5"/>`;
+  // right SF → final right edge
+  svg += `<line x1="${rExitX}" y1="${rExitY}" x2="${fEnterR}" y2="${rExitY}" stroke="#c9a84c" stroke-width="1.2" opacity="0.5"/>`;
+  svg += `<line x1="${fEnterR}" y1="${rExitY}" x2="${fEnterR}" y2="${fMidY}" stroke="#c9a84c" stroke-width="1.2" opacity="0.5"/>`;
+  return svg;
+}
+
+// ═══════════════════════════════════════════════════════
+//  ROUND LABELS
+// ═══════════════════════════════════════════════════════
+function roundLabel(text, x, width, y) {
+  return `<div class="round-label" style="left:${x}px;top:${y}px;width:${width}px;">${text}</div>`;
+}
+
+// ═══════════════════════════════════════════════════════
+//  MAIN RENDER
+// ═══════════════════════════════════════════════════════
+function render(data) {
+  data = resolveAll(JSON.parse(JSON.stringify(data)));
+
+  const LRounds = [data.L.r32, data.L.r16, data.L.qf, data.L.sf];
+  const RRounds = [data.R.r32, data.R.r16, data.R.qf, data.R.sf];
+
+  const { cols: lCols, totalHeight } = layoutSide(LRounds, 0, 1);
+
+  // Right side: same layout, then mirror horizontally
+  const { cols: rColsRaw } = layoutSide(RRounds, 0, -1);
+
+  // How wide is each half? 4 columns × (CW + COL_GAP) − COL_GAP
+  const halfW = 4 * CW + 3 * COL_GAP;
+  // Centre gap for the final card + champion box
+  const champW = 110;
+  const centreGap = CW + COL_GAP * 2 + champW + 8; // final card + space
+  const canvasW = SIDE_PAD + halfW + centreGap + halfW + SIDE_PAD;
+
+  // Mirror right cols: flip x = halfW + centreGap + (halfW - (col.x + CW))
+  //  = halfW + centreGap + halfW - col.x - CW
+  const rOffset = SIDE_PAD + halfW + centreGap;
+  const rCols = rColsRaw.map(col =>
+    col.map(item => ({
+      ...item,
+      x: rOffset + (halfW - item.x - CW),
+    }))
+  );
+
+  // Apply left offset to left cols
+  const lOffset = SIDE_PAD;
+  const lCols2 = lCols.map(col =>
+    col.map(item => ({ ...item, x: item.x + lOffset }))
+  );
+
+  // Final card: centred horizontally, vertically centred
+  const finalX = SIDE_PAD + halfW + COL_GAP * 1.5;
+  const canvasH = totalHeight + TOP_PAD + 40;
+  const finalY = (canvasH - CH) / 2;
+
+  // Champion box: to the right of final (or below on small screens — we go right)
+  const champX = finalX + CW + 10;
+  const champY = finalY - 10;
+  const champH = CH + 20;
+
+  // ── Build SVG connectors ──
+  let svgLines = '';
+  svgLines += connectorLines(lCols2, 1);
+  svgLines += connectorLines(rCols, -1);
+
+  // Final connectors from SFs
+  const sfLCol = lCols2[3]; // last left col = SF
+  const sfRCol = rCols[3];  // last right col = SF
+  svgLines += finalConnectors(sfLCol, sfRCol, finalX, finalY, canvasW);
+
+  // ── Build card HTML ──
+  let cards = '';
+
+  // Left side
+  lCols2.forEach(col => col.forEach(item => {
+    cards += matchHTML(item.match, item.x, item.y);
+  }));
+
+  // Right side
+  rCols.forEach(col => col.forEach(item => {
+    cards += matchHTML(item.match, item.x, item.y);
+  }));
+
+  // Final
+  cards += matchHTML(data.final, finalX, finalY);
+
+  // Champion box
+  const champ = data.champion;
+  cards += `
+    <div class="champion-box" style="left:${champX}px;top:${champY}px;width:${champW}px;height:${champH}px;display:flex;flex-direction:column;justify-content:center;align-items:center;">
+      <div class="champ-label">🏆 Champion</div>
+      ${champ
+        ? `<span class="champ-flag">${fl(champ)}</span><div class="champ-name">${champ}</div>`
+        : `<div class="champ-name" style="color:var(--muted);font-size:11px;font-weight:400;">Awaiting Final</div>`}
+    </div>`;
+
+  // Round labels (top of each column)
+  const labels = ['Round of 32','Round of 16','Quarters','Semis'];
+  lCols2.forEach((col, i) => {
+    cards += roundLabel(labels[i], col[0].x, CW, TOP_PAD - 22);
+  });
+  rCols.forEach((col, i) => {
+    cards += roundLabel(labels[i], col[0].x, CW, TOP_PAD - 22);
+  });
+  cards += roundLabel('Final', finalX, CW, finalY - 22);
+
+  const html = `
+    <div class="bracket-canvas" style="width:${canvasW}px;height:${canvasH}px;">
+      <svg class="connector-svg" width="${canvasW}" height="${canvasH}">
+        ${svgLines}
+      </svg>
+      ${cards}
+    </div>`;
+
+  return html;
+}
+
+// ═══════════════════════════════════════════════════════
+//  LIVE DATA
+//  ESPN blocks direct browser fetch() due to CORS.
+//  We use a personal Cloudflare Worker as a relay —
+//  see the setup instructions in the README / comments.
+//
+//  ► SETUP (one-time, ~2 min):
+//    1. Go to https://workers.cloudflare.com  (free account)
+//    2. Create a new Worker and paste the worker code below
+//    3. Deploy it — you'll get a URL like:
+//       https://wc-scores.YOUR-NAME.workers.dev
+//    4. Replace WORKER_URL below with your Worker URL
+// ═══════════════════════════════════════════════════════
+
+// ▼▼▼ PASTE YOUR WORKER URL HERE ▼▼▼
+const WORKER_URL = 'https://wcscores.travisdcruz.workers.dev/';
+// ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
+
+/*
+  ── CLOUDFLARE WORKER CODE ──────────────────────────────
+  Create a new Worker at workers.cloudflare.com and paste
+  this entire block (without the JS comment markers):
+
+  export default {
+    async fetch(request) {
+      const ESPN = 'https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard';
+      const res  = await fetch(ESPN, { cf: { cacheEverything: true, cacheTtl: 60 } });
+      const json = await res.text();
+      return new Response(json, {
+        headers: {
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*',
+          'Cache-Control': 'public, max-age=60',
+        },
+      });
+    },
+  };
+
+  ────────────────────────────────────────────────────────
+*/
+
+async function fetchLive() {
+  if (WORKER_URL.includes('YOUR-NAME')) {
+    // Worker not yet configured — show a one-time console note, use seed data
+    console.info(
+      '[WC Bracket] Live scores paused: set WORKER_URL to your Cloudflare Worker. ' +
+      'See setup instructions in the source code.'
+    );
+    return null;
+  }
+  try {
+    const r = await fetch(WORKER_URL, { cache: 'no-store' });
+    if (!r.ok) throw new Error(`Worker returned HTTP ${r.status}`);
+    return await r.json();
+  } catch(e) {
+    console.warn('[WC Bracket] Worker fetch failed, showing static data:', e.message);
+    return null;
+  }
+}
+
+function applyLive(data, espn) {
+  if (!espn?.events) return data;
+  const evs = espn.events;
+  function upd(matches) {
+    return matches.map(m => {
+      if (!m.home || !m.away) return m;
+      const ev = evs.find(e => {
+        const ab = (e.competitions?.[0]?.competitors||[]).map(c=>c.team?.abbreviation?.toUpperCase());
+        return ab.includes(m.home?.toUpperCase()) && ab.includes(m.away?.toUpperCase());
+      });
+      if (!ev) return m;
+      const comps = ev.competitions?.[0]?.competitors || [];
+      const hc = comps.find(c=>c.team?.abbreviation?.toUpperCase()===m.home?.toUpperCase());
+      const ac = comps.find(c=>c.team?.abbreviation?.toUpperCase()===m.away?.toUpperCase());
+      const st = ev.status?.type?.name || '';
+      const ns = st==='STATUS_FINAL'?'final':st==='STATUS_IN_PROGRESS'?'live':'scheduled';
+      return { ...m, hS: hc?.score!=null?parseInt(hc.score):m.hS, aS: ac?.score!=null?parseInt(ac.score):m.aS, st:ns };
+    });
+  }
+  data.L.r32 = upd(data.L.r32); data.L.r16 = upd(data.L.r16);
+  data.L.qf  = upd(data.L.qf);  data.L.sf  = upd(data.L.sf);
+  data.R.r32 = upd(data.R.r32); data.R.r16 = upd(data.R.r16);
+  data.R.qf  = upd(data.R.qf);  data.R.sf  = upd(data.R.sf);
+  data.final = upd([data.final])[0];
+  return data;
+}
+
+// ═══════════════════════════════════════════════════════
+//  COUNTDOWN
+// ═══════════════════════════════════════════════════════
+let secs = REFRESH_MS/1000, tick = null;
+function startTick() {
+  secs = REFRESH_MS/1000;
+  clearInterval(tick);
+  tick = setInterval(()=>{
+    secs = Math.max(0,secs-1);
+    const el=document.getElementById('countdown');
+    if(el) el.textContent=`Next: ${Math.floor(secs/60)}:${(secs%60).toString().padStart(2,'0')}`;
+  },1000);
+}
+
+// ═══════════════════════════════════════════════════════
+//  MAIN LOOP
+// ═══════════════════════════════════════════════════════
+async function refresh() {
+  const live = await fetchLive();
+  const state = applyLive(JSON.parse(JSON.stringify(SEED)), live);
+  document.getElementById('root').innerHTML = render(state);
+  const el = document.getElementById('last-updated');
+  if(el) el.textContent = 'Updated ' + new Date().toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
+  startTick();
+}
+
+refresh();
+setInterval(refresh, REFRESH_MS);
+</script>
+</body>
+</html>
